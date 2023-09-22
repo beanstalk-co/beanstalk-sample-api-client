@@ -1,11 +1,12 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 
 function App() {
   const [email, setEmail] = useState("parent@example.com");
   const [childName, setChildName] = useState("Johnny");
   const [links, setLinks] = useState(null);
   const [user, setUser] = useState(null);
-  const [conversation, setConversation] = useState(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
 
@@ -42,32 +43,25 @@ function App() {
       <div>
         Welcome {JSON.stringify(user)}
 
-        {conversation && <div>
-          <h2>Conversation</h2>
-          <div>{JSON.stringify(conversation)}</div>
-        </div>}
+        <div>
+          <button onClick={async () => {
+            const conversationResponse = await fetch(user._links["conversations:create"].href, {
+              method: "POST",
+              headers: {
+                "Authorization": "Bearer 66290d71-7bbe-4c63-98a6-36ba7d843ae4",
+                "Content-Type": "application/json"
+              },
+              body: JSON.stringify({}),
+              credentials: "include"
+            });
 
-        {
-          !conversation && <div>
-            <button onClick={async () => {
-              const conversationResponse = await fetch(user._links["conversations:create"].href, {
-                method: "POST",
-                headers: {
-                  "Authorization": "Bearer 66290d71-7bbe-4c63-98a6-36ba7d843ae4",
-                  "Content-Type": "application/json"
-                },
-                body: JSON.stringify({}),
-                credentials: "include"
-              });
+            if (conversationResponse.status === 201) {
+              const conversation = await conversationResponse.json();
+              navigate(`/conversations/${conversation.id}`);
+            }
 
-              if (conversationResponse.status === 201) {
-                const conversation = await conversationResponse.json();
-                setConversation(conversation);
-              }
-
-            }}>Create Conversation</button>
-          </div>
-        }
+          }}>Create Conversation</button>
+        </div>
 
       </div>
     );
