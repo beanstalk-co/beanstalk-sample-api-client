@@ -8,6 +8,7 @@ let isPlaying = false;
 
 function Conversation() {
   const [links, setLinks] = useState(null);
+  const [message, setMessage] = useState("");
   const [user, setUser] = useState(null);
   const [conversation, setConversation] = useState(null);
   const { conversationId } = useParams();
@@ -60,8 +61,7 @@ function Conversation() {
   }, [conversationId]);
 
   if (conversation) {
-    // if (conversation._links["start"] || true) {
-    if (true) {
+    if (conversation._links["start"]) {
       return (
         <div>
           <button onClick={async () => {
@@ -81,9 +81,6 @@ function Conversation() {
                 startResponse,
                 (jsonData) => {
                   setConversation(JSON.parse(jsonData));
-                },
-                (audioData) => {
-                  console.log(audioData);
                 }
               );
               console.log("started");
@@ -97,6 +94,41 @@ function Conversation() {
       return (
         <div>
           Conversation!
+
+          <form onSubmit={async e => {
+            e.preventDefault();
+
+            const url = conversation._links["messages:create"].href;
+            const messageResponse = await fetch(url, {
+              method: "POST",
+              headers: {
+                "Authorization": `Bearer ${process.env.REACT_APP_API_KEY}`,
+                "Content-Type": "application/json"
+              },
+              body: JSON.stringify({
+                message
+              }),
+              credentials: "include"
+            });
+
+            if (messageResponse.status === 200) {
+              await parseMultipartResponse(messageResponse);
+              console.log("started");
+              setMessage("");
+            }
+          }}>
+
+            <div>
+              <textarea value={message}
+                onChange={e => setMessage(e.target.value)}
+                placeholder="Type your message here"
+                ></textarea>
+            </div>
+            <div>
+              <button type="submit">Send</button>
+            </div>
+
+          </form>
         </div>
       );
     }
@@ -114,7 +146,7 @@ function indexOf(array, search) {
 };
 
 
-async function parseMultipartResponse(response, jsonCallback, audioCallback) {
+async function parseMultipartResponse(response, jsonCallback = () => {}) {
   const reader = response.body.getReader();
   let boundary = getBoundary(response.headers.get('Content-Type'));
   let buffer = new Uint8Array();
