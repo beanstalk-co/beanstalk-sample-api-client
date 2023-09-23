@@ -2,6 +2,9 @@ import { useState, useEffect } from "react";
 import { parse } from "uri-template";
 import { useParams } from "react-router-dom";
 
+let audioContext;
+let bufferQueue = [];
+let isPlaying = false;
 
 function Conversation() {
   const [links, setLinks] = useState(null);
@@ -12,9 +15,9 @@ function Conversation() {
   useEffect(() => {
 
     (async () => {
-      const linksResponse = await fetch("http://localhost:8000/", {
+      const linksResponse = await fetch(process.env.REACT_APP_API_URL, {
         headers: {
-          "Authorization": "Bearer 66290d71-7bbe-4c63-98a6-36ba7d843ae4"
+          "Authorization": `Bearer ${process.env.REACT_APP_API_KEY}`
         },
         credentials: "include"
       })
@@ -23,7 +26,7 @@ function Conversation() {
       try {
         const meResponse = await fetch(links._links["me"].href, {
           headers: {
-            "Authorization": "Bearer 66290d71-7bbe-4c63-98a6-36ba7d843ae4"
+            "Authorization": `Bearer ${process.env.REACT_APP_API_KEY}`
           },
           credentials: "include"
         });
@@ -39,7 +42,7 @@ function Conversation() {
       try {
         const conversationResponse = await fetch(url, {
           headers: {
-            "Authorization": "Bearer 66290d71-7bbe-4c63-98a6-36ba7d843ae4"
+            "Authorization": `Bearer ${process.env.REACT_APP_API_KEY}`
           },
           credentials: "include"
         });
@@ -57,20 +60,32 @@ function Conversation() {
   }, [conversationId]);
 
   if (conversation) {
-    if (conversation._links["start"]) {
+    // if (conversation._links["start"] || true) {
+    if (true) {
       return (
         <div>
           <button onClick={async () => {
+            audioContext = audioContext || new AudioContext();
+
             const url = conversation._links["start"].href;
             const startResponse = await fetch(url, {
               method: "POST",
               headers: {
-                "Authorization": "Bearer 66290d71-7bbe-4c63-98a6-36ba7d843ae4"
+                "Authorization": `Bearer ${process.env.REACT_APP_API_KEY}`
               },
               credentials: "include"
             });
 
             if (startResponse.status === 200) {
+              await parseMultipartResponse(
+                startResponse,
+                (jsonData) => {
+                  setConversation(JSON.parse(jsonData));
+                },
+                (audioData) => {
+                  console.log(audioData);
+                }
+              );
               console.log("started");
             }
           }}>
@@ -89,6 +104,106 @@ function Conversation() {
 
   return "Loading..."
 
+}
+
+function indexOf(array, search) {
+  const searchArray = new TextEncoder().encode(search);
+  let foundIndex = -1;
+  array.some((_, i) => array.slice(i, i + searchArray.length).every((val, j) => val === searchArray[j]) ? ((foundIndex = i), true) : false);
+  return foundIndex;
+};
+
+
+async function parseMultipartResponse(response, jsonCallback, audioCallback) {
+  const reader = response.body.getReader();
+  let boundary = getBoundary(response.headers.get('Content-Type'));
+  let buffer = new Uint8Array();
+
+  while (true) {
+    const { done, value } = await reader.read();
+
+    if (done) {
+      processChunk(buffer);
+      break;
+    }
+
+    let tmp = new Uint8Array(buffer.length + value.length);
+    tmp.set(buffer, 0);
+    tmp.set(value, buffer.length);
+    buffer = tmp;
+    let boundaryIndex = indexOf(buffer, boundary);
+
+    while (boundaryIndex !== -1) {
+      let chunk = buffer.slice(0, boundaryIndex);
+      processChunk(chunk, jsonCallback);
+      buffer = buffer.slice(boundaryIndex + boundary.length);
+      boundaryIndex = indexOf(buffer, boundary);
+    }
+  }
+}
+
+function processChunk(chunk, jsonCallback) {
+  const separatorIndex = indexOf(chunk, "\r\n\r\n");
+
+  if (separatorIndex !== -1) {
+    const headersString = new TextDecoder().decode(chunk.slice(0, separatorIndex));
+    const headersArray = headersString.split('\r\n');
+    const headers = headersArray.reduce((acc, headerLine) => {
+      const [key, value] = headerLine.split(': ');
+      acc[key] = value;
+      return acc;
+    }, {});
+
+    console.log('Content-Type of the chunk:', headers['Content-Type']);
+
+    const body = chunk.slice(separatorIndex + "\r\n\r\n".length);
+
+    if (body.length > 0) {
+      switch (headers['Content-Type']) {
+        case 'application/json':
+          const jsonString = new TextDecoder().decode(body);
+
+          console.log("body", jsonString);
+          const jsonData = jsonString.slice(0, -2);
+          jsonCallback(jsonData);
+          break;
+
+        case 'audio/mpeg':
+          const audioArrayBuffer = body.buffer;
+          audioContext.decodeAudioData(audioArrayBuffer, (decodedData) => {
+            bufferQueue.push(decodedData);
+            if (!isPlaying) {
+              playAudioBuffer(); // Start playing if not already playing
+            }
+          });
+          break;
+      }
+    }
+  }
+}
+
+function getBoundary(contentType) {
+  // Parse the boundary from the Content-Type header
+  return contentType.split(';')[1].split('=')[1];
+}
+
+async function playAudioBuffer() {
+  if (isPlaying || bufferQueue.length === 0) {
+    console.log("done playing")
+    return
+  };
+  console.log("playing")
+  isPlaying = true;
+
+  const currentBuffer = bufferQueue.shift();
+  const source = audioContext.createBufferSource();
+  source.buffer = currentBuffer;
+  source.connect(audioContext.destination);
+  source.onended = () => {
+    isPlaying = false;
+    playAudioBuffer();
+  };
+  source.start();
 }
 
 export default Conversation;

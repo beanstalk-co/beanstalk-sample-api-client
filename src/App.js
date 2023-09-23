@@ -7,13 +7,14 @@ function App() {
   const [links, setLinks] = useState(null);
   const [user, setUser] = useState(null);
   const navigate = useNavigate();
+  const [characters, setCharacters] = useState(null);
 
   useEffect(() => {
 
     (async () => {
-      const linksResponse = await fetch("http://localhost:8000/", {
+      const linksResponse = await fetch(process.env.REACT_APP_API_URL, {
         headers: {
-          "Authorization": "Bearer 66290d71-7bbe-4c63-98a6-36ba7d843ae4"
+          "Authorization": `Bearer ${process.env.REACT_APP_API_KEY}`
         },
         credentials: "include"
       })
@@ -22,7 +23,7 @@ function App() {
       try {
         const meResponse = await fetch(links._links["me"].href, {
           headers: {
-            "Authorization": "Bearer 66290d71-7bbe-4c63-98a6-36ba7d843ae4"
+            "Authorization": `Bearer ${process.env.REACT_APP_API_KEY}`
           },
           credentials: "include"
         });
@@ -38,32 +39,79 @@ function App() {
 
   }, []);
 
+  useEffect(() => {
+    if (links) {
+      (async () => {
+        const charactersResponse = await fetch(links._links["characters"].href, {
+          headers: {
+            "Authorization": `Bearer ${process.env.REACT_APP_API_KEY}`
+          },
+          credentials: "include"
+        })
+        const characters = await charactersResponse.json();
+
+        setCharacters(characters);
+      })();
+    }
+
+  }, [links, user]);
+
   if (user) {
     return (
       <div>
-        Welcome {JSON.stringify(user)}
+        <h1>
+          Welcome {user.childName}!
+        </h1>
 
-        <div>
-          <button onClick={async () => {
-            const conversationResponse = await fetch(user._links["conversations:create"].href, {
-              method: "POST",
-              headers: {
-                "Authorization": "Bearer 66290d71-7bbe-4c63-98a6-36ba7d843ae4",
-                "Content-Type": "application/json"
-              },
-              body: JSON.stringify({}),
-              credentials: "include"
-            });
+        {
+          characters && <div>
+            <h2>Choose a Character</h2>
+            {
+              characters.map(
+                character => {
+                  return <div key={character.url_slug}>
+                    <h3>{character.name}</h3>
+                    <img src={character.thumbnail_url} alt={character.name} style={{maxWidth: "200px"}} />
+                    <ul>
+                      {character.scenes.map(scene => {
+                        return <li key={scene.url_slug}>
+                          <a href="#" onClick={async e => {
+                            e.preventDefault();
 
-            if (conversationResponse.status === 201) {
-              const conversation = await conversationResponse.json();
-              navigate(`/conversations/${conversation.id}`);
+                            const conversationResponse = await fetch(user._links["conversations:create"].href, {
+                              method: "POST",
+                              headers: {
+                                "Authorization": `Bearer ${process.env.REACT_APP_API_KEY}`,
+                                "Content-Type": "application/json"
+                              },
+                              body: JSON.stringify({
+                                character: character.url_slug,
+                                scene: scene.url_slug
+                              }),
+                              credentials: "include"
+                            });
+
+                            if (conversationResponse.status === 201) {
+                              const conversation = await conversationResponse.json();
+                              navigate(`/conversations/${conversation.id}`);
+                            }
+                          }}>
+                            {scene.name}
+                          </a>
+                        </li>
+                      })
+                      }
+                    </ul>
+                  </div>
+                }
+              )
             }
 
-          }}>Create Conversation</button>
-        </div>
 
-      </div>
+          </div>
+        }
+
+      </div >
     );
   }
 
@@ -71,12 +119,11 @@ function App() {
     return <div>
       <form onSubmit={async (e) => {
         e.preventDefault();
-        console.log(links);
 
         const loginResponse = await fetch(links._links["login"].href, {
           method: "POST",
           headers: {
-            "Authorization": "Bearer 66290d71-7bbe-4c63-98a6-36ba7d843ae4",
+            "Authorization": `Bearer ${process.env.REACT_APP_API_KEY}`,
             "Content-Type": "application/json"
           },
           body: JSON.stringify({
