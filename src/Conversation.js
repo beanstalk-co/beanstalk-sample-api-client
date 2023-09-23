@@ -9,6 +9,8 @@ let isPlaying = false;
 function Conversation() {
   const [links, setLinks] = useState(null);
   const [message, setMessage] = useState("");
+  const [messageEnabled, setMessageEnabled] = useState(false);
+  const [started, setStarted] = useState(false);
   const [user, setUser] = useState(null);
   const [conversation, setConversation] = useState(null);
   const { conversationId } = useParams();
@@ -49,7 +51,8 @@ function Conversation() {
         });
 
         if (conversationResponse.status === 200) {
-          setConversation((await conversationResponse.json()));
+          const conversation = await conversationResponse.json();
+          setConversation(conversation);
         }
       } catch (e) {
       }
@@ -61,11 +64,12 @@ function Conversation() {
   }, [conversationId]);
 
   if (conversation) {
-    if (conversation._links["start"]) {
+    if (!started) {
       return (
         <div>
           <button onClick={async () => {
             audioContext = audioContext || new AudioContext();
+            setStarted(true);
 
             const url = conversation._links["start"].href;
             const startResponse = await fetch(url, {
@@ -81,6 +85,9 @@ function Conversation() {
                 startResponse,
                 (jsonData) => {
                   setConversation(JSON.parse(jsonData));
+                },
+                () => { 
+                  setMessageEnabled(true);
                 }
               );
               console.log("started");
@@ -97,6 +104,7 @@ function Conversation() {
 
           <form onSubmit={async e => {
             e.preventDefault();
+            setMessageEnabled(false);
 
             const url = conversation._links["messages:create"].href;
             const messageResponse = await fetch(url, {
@@ -112,7 +120,13 @@ function Conversation() {
             });
 
             if (messageResponse.status === 200) {
-              await parseMultipartResponse(messageResponse);
+              await parseMultipartResponse(
+                messageResponse,
+                () => {},
+                () => {
+                  setMessageEnabled(true);
+                }
+              );
               console.log("started");
               setMessage("");
             }
@@ -122,10 +136,11 @@ function Conversation() {
               <textarea value={message}
                 onChange={e => setMessage(e.target.value)}
                 placeholder="Type your message here"
+                disabled={!messageEnabled}
                 ></textarea>
             </div>
             <div>
-              <button type="submit">Send</button>
+              <button type="submit" disabled={!messageEnabled}>Send</button>
             </div>
 
           </form>
@@ -146,7 +161,7 @@ function indexOf(array, search) {
 };
 
 
-async function parseMultipartResponse(response, jsonCallback = () => {}) {
+async function parseMultipartResponse(response, jsonCallback, onComplete) {
   const reader = response.body.getReader();
   let boundary = getBoundary(response.headers.get('Content-Type'));
   let buffer = new Uint8Array();
@@ -155,7 +170,7 @@ async function parseMultipartResponse(response, jsonCallback = () => {}) {
     const { done, value } = await reader.read();
 
     if (done) {
-      processChunk(buffer);
+      processChunk(buffer, jsonCallback, onComplete);
       break;
     }
 
@@ -167,14 +182,14 @@ async function parseMultipartResponse(response, jsonCallback = () => {}) {
 
     while (boundaryIndex !== -1) {
       let chunk = buffer.slice(0, boundaryIndex);
-      processChunk(chunk, jsonCallback);
+      processChunk(chunk, jsonCallback, onComplete);
       buffer = buffer.slice(boundaryIndex + boundary.length);
       boundaryIndex = indexOf(buffer, boundary);
     }
   }
 }
 
-function processChunk(chunk, jsonCallback) {
+function processChunk(chunk, jsonCallback, onComplete) {
   const separatorIndex = indexOf(chunk, "\r\n\r\n");
 
   if (separatorIndex !== -1) {
@@ -194,8 +209,6 @@ function processChunk(chunk, jsonCallback) {
       switch (headers['Content-Type']) {
         case 'application/json':
           const jsonString = new TextDecoder().decode(body);
-
-          console.log("body", jsonString);
           const jsonData = jsonString.slice(0, -2);
           jsonCallback(jsonData);
           break;
@@ -205,7 +218,7 @@ function processChunk(chunk, jsonCallback) {
           audioContext.decodeAudioData(audioArrayBuffer, (decodedData) => {
             bufferQueue.push(decodedData);
             if (!isPlaying) {
-              playAudioBuffer(); // Start playing if not already playing
+              playAudioBuffer(onComplete);
             }
           });
           break;
@@ -219,9 +232,10 @@ function getBoundary(contentType) {
   return contentType.split(';')[1].split('=')[1];
 }
 
-async function playAudioBuffer() {
+async function playAudioBuffer(onComplete) {
   if (isPlaying || bufferQueue.length === 0) {
     console.log("done playing")
+    onComplete();
     return
   };
   console.log("playing")
@@ -233,7 +247,7 @@ async function playAudioBuffer() {
   source.connect(audioContext.destination);
   source.onended = () => {
     isPlaying = false;
-    playAudioBuffer();
+    playAudioBuffer(onComplete);
   };
   source.start();
 }
