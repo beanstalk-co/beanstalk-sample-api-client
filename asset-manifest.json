@@ -1,15 +1,15 @@
 {
   "files": {
     "main.css": "/beanstalk-sample-api-client/static/css/main.e6c13ad2.css",
-    "main.js": "/beanstalk-sample-api-client/static/js/main.866a850a.js",
+    "main.js": "/beanstalk-sample-api-client/static/js/main.b379c4de.js",
     "static/js/787.87b87cb7.chunk.js": "/beanstalk-sample-api-client/static/js/787.87b87cb7.chunk.js",
     "index.html": "/beanstalk-sample-api-client/index.html",
     "main.e6c13ad2.css.map": "/beanstalk-sample-api-client/static/css/main.e6c13ad2.css.map",
-    "main.866a850a.js.map": "/beanstalk-sample-api-client/static/js/main.866a850a.js.map",
+    "main.b379c4de.js.map": "/beanstalk-sample-api-client/static/js/main.b379c4de.js.map",
     "787.87b87cb7.chunk.js.map": "/beanstalk-sample-api-client/static/js/787.87b87cb7.chunk.js.map"
   },
   "entrypoints": [
     "static/css/main.e6c13ad2.css",
-    "static/js/main.866a850a.js"
+    "static/js/main.b379c4de.js"
   ]
 }
