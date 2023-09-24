@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { parse } from "uri-template";
-import { useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 
 let audioContext;
 let bufferQueue = [];
@@ -67,6 +67,11 @@ function Conversation() {
     if (!started) {
       return (
         <div>
+          <div>
+            <nav>
+              <Link to="/">Home</Link>
+            </nav>
+          </div>
           <button onClick={async () => {
             audioContext = audioContext || new AudioContext();
             setStarted(true);
@@ -100,13 +105,19 @@ function Conversation() {
     } else {
       return (
         <div>
+          <div>
+            <nav>
+              <Link to="/">Home</Link>
+            </nav>
+          </div>
+
           Conversation!
 
           <form onSubmit={async e => {
             e.preventDefault();
             setMessageEnabled(false);
 
-            const url = conversation._links["messages:create"].href;
+            const url = conversation._links.messages.href;
             const messageResponse = await fetch(url, {
               method: "POST",
               headers: {
